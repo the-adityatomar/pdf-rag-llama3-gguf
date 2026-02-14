@@ -1,0 +1,12 @@
+streamlit
+transformers
+accelerate
+bitsandbytes
+torch
+sentence-transformers
+llama-index
+llama-index-embeddings-huggingface
+llama-index-llms-huggingface
+faiss-cpu
+pypdf
+python-dotenv
