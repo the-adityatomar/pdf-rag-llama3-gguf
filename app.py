@@ -1,182 +1,176 @@
-import streamlit as st
 import os
 import time
+import gradio as gr
+from huggingface_hub import hf_hub_download
+from llama_cpp import Llama
 
 from rag.loader import load_pdf
 from rag.indexer import build_index
 from rag.retriever import retrieve_context
-from rag.generator import load_model, generate_response
 from rag.prompts import build_prompt
 from utils.metrics import approximate_token_count
 
 
-# ------------------------------
-# Page Configuration
-# ------------------------------
-st.set_page_config(page_title="PDF Conversational RAG", layout="wide")
-st.title("📄 PDF Conversational Intelligence (Llama 3 RAG)")
+# ----------------------------
+# Download GGUF Model
+# ----------------------------
+MODEL_REPO = "QuantFactory/Meta-Llama-3-8B-Instruct-GGUF"
+MODEL_FILENAME = "Meta-Llama-3-8B-Instruct.Q4_K_M.gguf"
+
+print("Downloading GGUF model (first run may take time)...")
+
+MODEL_PATH = hf_hub_download(
+    repo_id=MODEL_REPO,
+    filename=MODEL_FILENAME
+)
+
+print("Model downloaded.")
 
 
-# ------------------------------
-# Session State Initialization
-# ------------------------------
-if "chat_history" not in st.session_state:
-    st.session_state.chat_history = []
+# ----------------------------
+# Load Llama.cpp Model (CPU)
+# ----------------------------
+print("Loading model into memory...")
 
-if "question_count" not in st.session_state:
-    st.session_state.question_count = 0
+llm = Llama(
+    model_path=MODEL_PATH,
+    n_ctx=4096,
+    n_threads=os.cpu_count(),
+    n_gpu_layers=0  # CPU only
+)
 
-if "index" not in st.session_state:
-    st.session_state.index = None
-
-if "current_pdf" not in st.session_state:
-    st.session_state.current_pdf = None
-
-
-# ------------------------------
-# Sidebar Controls
-# ------------------------------
-st.sidebar.header("⚙️ Retrieval Settings")
-
-chunk_size = st.sidebar.slider("Chunk Size", 300, 1200, 800, step=100)
-chunk_overlap = st.sidebar.slider("Chunk Overlap", 0, 300, 100, step=50)
-top_k = st.sidebar.slider("Top K Chunks", 1, 5, 3)
-temperature = st.sidebar.slider("Temperature", 0.0, 1.0, 0.2, step=0.1)
-
-show_context = st.sidebar.checkbox("Show Retrieved Context")
+print("Model loaded successfully.")
 
 
-# ------------------------------
-# Load Llama Model (Cached)
-# ------------------------------
-tokenizer, model = load_model()
+# ----------------------------
+# Global State
+# ----------------------------
+index = None
+chat_history = []
+question_count = 0
+current_pdf = None
 
 
-# ------------------------------
-# PDF Upload Section
-# ------------------------------
-uploaded_file = st.file_uploader("Upload a PDF", type="pdf")
+# ----------------------------
+# PDF Processing
+# ----------------------------
+def process_pdf(file, chunk_size, chunk_overlap):
+    global index, chat_history, question_count, current_pdf
 
-if uploaded_file is not None:
+    if file is None:
+        return "Please upload a PDF."
 
-    # If new PDF uploaded → reset session
-    if uploaded_file.name != st.session_state.current_pdf:
+    if file.name != current_pdf:
 
-        with open("temp.pdf", "wb") as f:
-            f.write(uploaded_file.read())
+        documents = load_pdf(file.name)
 
-        with st.spinner("Processing and indexing document..."):
-            documents = load_pdf("temp.pdf")
+        index = build_index(
+            documents,
+            chunk_size=chunk_size,
+            chunk_overlap=chunk_overlap
+        )
 
-            st.session_state.index = build_index(
-                documents,
-                chunk_size=chunk_size,
-                chunk_overlap=chunk_overlap
-            )
+        chat_history = []
+        question_count = 0
+        current_pdf = file.name
 
-        st.session_state.chat_history = []
-        st.session_state.question_count = 0
-        st.session_state.current_pdf = uploaded_file.name
-
-        st.success("Document indexed successfully!")
+    return "Document indexed successfully."
 
 
-# ------------------------------
-# Display Existing Chat History
-# ------------------------------
-for message in st.session_state.chat_history:
-    with st.chat_message(message["role"]):
-        st.markdown(message["content"])
+# ----------------------------
+# Chat Function
+# ----------------------------
+def chat_function(message, history, chunk_size, chunk_overlap, top_k, temperature):
+    global index, chat_history, question_count
 
+    if index is None:
+        return "Upload a PDF first."
 
-# ------------------------------
-# Chat Input
-# ------------------------------
-if prompt := st.chat_input("Ask a question about the document..."):
+    if question_count >= 10:
+        chat_history = []
+        question_count = 0
+        return "Maximum 10 questions reached. Session reset."
 
-    # Guard: No document
-    if st.session_state.index is None:
-        st.warning("Please upload a PDF first.")
-        st.stop()
+    question_count += 1
 
-    # Enforce 10-question limit
-    if st.session_state.question_count >= 10:
-        st.warning("Maximum of 10 questions reached. Resetting session.")
-        st.session_state.chat_history = []
-        st.session_state.question_count = 0
-        st.stop()
+    start_time = time.time()
 
-    st.session_state.question_count += 1
-
-    # Display User Message
-    with st.chat_message("user"):
-        st.markdown(prompt)
-
-    st.session_state.chat_history.append(
-        {"role": "user", "content": prompt}
-    )
-
-    # ------------------------------
     # Retrieval
-    # ------------------------------
-    retrieved_chunks = retrieve_context(
-        st.session_state.index,
-        prompt,
-        top_k=top_k
-    )
+    retrieved_chunks = retrieve_context(index, message, top_k=top_k)
 
     document_context = "\n\n".join(
         [chunk["text"] for chunk in retrieved_chunks]
     )
 
-    # Keep only last 2 exchanges (4 messages total)
-    recent_history = st.session_state.chat_history[-4:]
+    # Keep only last 2 exchanges
+    recent_history = chat_history[-4:]
 
     conversation_context = ""
     for msg in recent_history:
         conversation_context += f"{msg['role']}: {msg['content']}\n"
 
-    # ------------------------------
-    # Prompt Construction
-    # ------------------------------
+    # Build Prompt
     final_prompt = build_prompt(
         conversation_context,
         document_context,
-        prompt
+        message
     )
 
-    # ------------------------------
-    # Generation
-    # ------------------------------
-    response, latency = generate_response(
-        tokenizer,
-        model,
+    # Generate
+    output = llm(
         final_prompt,
-        temperature=temperature
+        max_tokens=512,
+        temperature=temperature,
+        top_p=0.9
     )
 
-    # Clean response extraction
-    answer = response.replace(final_prompt, "").strip()
+    answer = output["choices"][0]["text"].strip()
 
+    latency = round(time.time() - start_time, 2)
     token_estimate = approximate_token_count(answer)
 
-    # ------------------------------
-    # Display Assistant Message
-    # ------------------------------
-    with st.chat_message("assistant"):
-        st.markdown(answer)
-        st.caption(
-            f"⏱ Response time: {latency} seconds | 🔢 Approx tokens: {token_estimate}"
-        )
+    chat_history.append({"role": "user", "content": message})
+    chat_history.append({"role": "assistant", "content": answer})
 
-        if show_context:
-            with st.expander("Retrieved Context"):
-                for i, chunk in enumerate(retrieved_chunks):
-                    st.markdown(
-                        f"**Chunk {i+1} (Score: {chunk['score']:.4f})**"
-                    )
-                    st.write(chunk["text"])
+    return f"{answer}\n\n⏱ {latency}s | 🔢 ~{token_estimate} tokens"
 
-    st.session_state.chat_history.append(
-        {"role": "assistant", "content": answer}
+
+# ----------------------------
+# Gradio Interface
+# ----------------------------
+with gr.Blocks() as demo:
+
+    gr.Markdown("# 📄 PDF Conversational Intelligence (Llama 3 GGUF - CPU)")
+
+    with gr.Row():
+        pdf_file = gr.File(label="Upload PDF", file_types=[".pdf"])
+
+    with gr.Row():
+        chunk_size = gr.Slider(300, 1200, value=800, step=100, label="Chunk Size")
+        chunk_overlap = gr.Slider(0, 300, value=100, step=50, label="Chunk Overlap")
+        top_k = gr.Slider(1, 5, value=3, step=1, label="Top K")
+        temperature = gr.Slider(0.0, 1.0, value=0.2, step=0.1, label="Temperature")
+
+    process_button = gr.Button("Process PDF")
+    status_output = gr.Textbox(label="Status")
+
+    process_button.click(
+        process_pdf,
+        inputs=[pdf_file, chunk_size, chunk_overlap],
+        outputs=status_output
     )
+
+    chatbot = gr.ChatInterface(
+        fn=lambda message, history: chat_function(
+            message,
+            history,
+            chunk_size.value,
+            chunk_overlap.value,
+            top_k.value,
+            temperature.value
+        )
+    )
+
+demo.launch()
+
+
