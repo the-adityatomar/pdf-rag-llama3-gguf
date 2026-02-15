@@ -1,8 +1,7 @@
 gradio
 llama-cpp-python
-sentence-transformers
-llama-index
-llama-index-embeddings-huggingface
 faiss-cpu
 pypdf
+huggingface-hub
+
 
