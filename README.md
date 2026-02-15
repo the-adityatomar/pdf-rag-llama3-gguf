@@ -1,3 +1,13 @@
+---
+title: PDF Conversational RAG (Llama 3 GGUF)
+emoji: 📄
+colorFrom: blue
+colorTo: green
+sdk: gradio
+sdk_version: "4.36.1"
+app_file: app.py
+pinned: false
+---
 # 📄 PDF Conversational RAG (Llama 3 GGUF – CPU Optimized)
 
 ## 🚀 Overview
