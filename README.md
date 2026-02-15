@@ -50,80 +50,43 @@ The model is instructed to answer **only from the document context**.
 
 ## 🏗 System Architecture
 
-# PDF Conversational Intelligence System (Llama 3 RAG)
 
-## Overview
-A GPU-powered conversational Retrieval-Augmented Generation (RAG) system that allows users to upload any PDF and interact with it using Meta Llama 3 8B.
+---
 
-## Architecture
+## 🧩 Tech Stack
 
-User → Streamlit UI  
-PDF → Chunking → MiniLM Embeddings → FAISS  
-Query → Retrieval → Prompt Assembly  
-Prompt → Llama 3 (4-bit quantized) → Response  
+### Language Model
+- Meta Llama 3 8B (GGUF Q4_K_M)
+- Backend: `llama.cpp` via `llama-cpp-python`
 
-## Core Features
+### Retrieval
+- sentence-transformers/all-MiniLM-L6-v2
+- FAISS (in-memory vector search)
 
-- Conversational chat interface
-- Maximum 10 consecutive questions per session
-- Only last 2 exchanges retained for context
-- Adjustable chunk size, overlap, top-k, temperature
-- Retrieved chunk transparency
-- Latency reporting
-- Approximate token estimation
-- Session-based document indexing
+### Framework
+- LlamaIndex (document loading + indexing pipeline)
 
-## Tech Stack
+### Interface
+- Gradio
 
-- LLM: Meta-Llama-3-8B-Instruct
-- Embeddings: all-MiniLM-L6-v2
-- Vector Store: FAISS (in-memory)
-- Framework: LlamaIndex
-- UI: Streamlit
-- Deployment: Hugging Face Spaces (GPU required)
+### Deployment Target
+- Hugging Face Spaces (CPU)
 
-## Deployment Steps
+---
 
-1. Push repo to GitHub
-2. Create Hugging Face Space
-3. Select:
-   - SDK: Streamlit
-   - Hardware: GPU (T4)
-4. Add Hugging Face token in Secrets
-5. Deploy
+## 📦 Installation (Local Development)
 
-## System Constraints
+Install dependencies:
 
-- Single document per session
-- Max 10 questions per upload
-- Retrieval based only on current query
-- Conversation memory limited to last 2 exchanges
-# PDF Conversational Intelligence System (Llama 3 RAG)
+```bash
+pip install -r requirements.txt
+```
+---
 
-## Overview
-A GPU-powered conversational RAG system that allows users to upload a PDF and interact with it using Llama 3.
+You can now:
 
-## Architecture
-- LLM: Meta Llama 3 8B Instruct
-- Embeddings: MiniLM
-- Vector Store: FAISS (in-memory)
-- Framework: LlamaIndex
-- UI: Streamlit
-- Deployment: Hugging Face Spaces (GPU)
-
-## Features
-- Chat-style interface
-- Up to 10 consecutive questions
-- Context from last 2 exchanges
-- Adjustable retrieval settings
-- Retrieved chunk transparency
-- Latency reporting
-
-## Setup
-1. Clone repo
-2. Install requirements
-3. Add HF token to `.env`
-4. Run: `streamlit run app.py`
-
-## Deployment
-Deploy via Hugging Face Spaces (Streamlit SDK, GPU enabled).
+```bash
+git add README.md
+git commit -m "Updated README for GGUF CPU architecture"
+git push
+```
