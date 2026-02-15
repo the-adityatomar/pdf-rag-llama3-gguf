@@ -1,3 +1,55 @@
+# 📄 PDF Conversational RAG (Llama 3 GGUF – CPU Optimized)
+
+## 🚀 Overview
+
+This project implements a **Conversational Retrieval-Augmented Generation (RAG) system** that allows users to upload a PDF and interact with it through a chat interface.
+
+The system is optimized for **CPU deployment** using:
+
+- Quantized Llama 3 (GGUF format)
+- `llama.cpp` inference backend
+- FAISS vector retrieval
+- MiniLM embeddings
+- Gradio interface
+
+It is designed to run efficiently on **Hugging Face CPU Spaces**, without requiring GPU acceleration.
+
+---
+
+## 🧠 How It Works
+
+1. User uploads a PDF  
+2. The document is chunked into smaller segments  
+3. Each chunk is embedded using MiniLM  
+4. FAISS builds an in-memory vector index  
+5. User asks a question  
+6. Top-K relevant chunks are retrieved  
+7. A structured prompt is constructed  
+8. Llama 3 GGUF generates a grounded answer  
+
+The model is instructed to answer **only from the document context**.
+
+---
+
+## ⚙️ Core Features
+
+- 📄 Upload any PDF
+- 💬 Conversational chat interface
+- 🔁 Maximum 10 consecutive questions per session
+- 🧠 Only the last 2 exchanges are retained for context
+- 🎛 Adjustable:
+  - Chunk size
+  - Chunk overlap
+  - Top-K retrieval
+  - Temperature
+- 📊 Response latency reporting
+- 🔢 Approximate token count display
+- 💻 Fully CPU-compatible deployment
+
+---
+
+## 🏗 System Architecture
+
 # PDF Conversational Intelligence System (Llama 3 RAG)
 
 ## Overview
