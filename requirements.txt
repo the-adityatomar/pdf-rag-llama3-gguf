@@ -3,5 +3,3 @@ llama-cpp-python
 faiss-cpu
 pypdf
 huggingface-hub
-
-
